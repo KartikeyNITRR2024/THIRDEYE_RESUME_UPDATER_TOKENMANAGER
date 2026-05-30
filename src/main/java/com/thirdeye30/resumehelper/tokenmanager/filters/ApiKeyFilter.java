@@ -40,7 +40,6 @@ public class ApiKeyFilter extends OncePerRequestFilter {
         if (requestApiKey == null) {
             requestApiKey = request.getParameter("THIRDEYE_RESUME_UPDATER_API_KEY");
         }
-        System.out.println(requestApiKey+" "+apiKey);
 
         if (apiKey != null && apiKey.equals(requestApiKey)) {
             filterChain.doFilter(request, response);
