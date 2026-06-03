@@ -122,8 +122,8 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
-    public UserDto updateName(UUID id, String name) {
-        if (userRepository.updateName(id, name) == 0) throw new RuntimeException("User not found");
+    public UserDto updateNameAndEmail(UUID id, String name, String email) {
+        if (userRepository.updateNameAndEmail(id, name, email) == 0) throw new RuntimeException("User not found");
         return mapToDto(userRepository.findById(id).orElseThrow());
     }
 

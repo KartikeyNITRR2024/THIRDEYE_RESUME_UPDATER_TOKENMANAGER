@@ -7,8 +7,8 @@ public interface UserService {
     UserDto createUser(UserDto userDto);
     UserDto getUser(UUID id);
     Long getToken(UUID id);
-    UserDto updateName(UUID id, String name);
     void deleteUsersOlderThan();
 	void addToken(UUID id, Long amount);
 	void subtractToken(UUID id, Long amount);
+	UserDto updateNameAndEmail(UUID id, String name, String email);
 }

@@ -19,11 +19,11 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     /**
      * Updates only the user's name.
      */
-    @Transactional
-    @Modifying
-    @Query("UPDATE User u SET u.name = :name WHERE u.id = :id")
-    int updateName(@Param("id") UUID id, @Param("name") String name);
-
+	@Transactional
+    @Modifying(clearAutomatically = true)
+    @Query("UPDATE User u SET u.name = :name, u.email = :email WHERE u.id = :id")
+    int updateNameAndEmail(@Param("id") UUID id, @Param("name") String name, @Param("email") String email);
+	
     /**
      * Updates only the user's token value.
      */

@@ -35,9 +35,12 @@ public class UserController {
         return ResponseEntity.ok(userService.getToken(id));
     }
 
-    @PutMapping("/{id}/name")
-    public ResponseEntity<UserDto> updateName(@PathVariable UUID id, @RequestParam String name) {
-        return new ResponseEntity<>(userService.updateName(id, name), HttpStatus.OK);
+    @PutMapping("/nameandemail/{id}/{name}/{email}")
+    public ResponseEntity<UserDto> updateName(
+            @PathVariable("id") UUID id, 
+            @PathVariable("name") String name, 
+            @PathVariable("email") String email) {
+        return new ResponseEntity<>(userService.updateNameAndEmail(id, name, email), HttpStatus.OK);
     }
     
     @PutMapping("/{id}/token/add/{amount}")

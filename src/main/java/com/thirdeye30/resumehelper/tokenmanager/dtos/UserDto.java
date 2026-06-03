@@ -9,6 +9,7 @@ import lombok.Data;
 public class UserDto {
 	private UUID id;
     private String name;
+    private String email;
     private Long token;
     private LocalDateTime createTime;
 }
