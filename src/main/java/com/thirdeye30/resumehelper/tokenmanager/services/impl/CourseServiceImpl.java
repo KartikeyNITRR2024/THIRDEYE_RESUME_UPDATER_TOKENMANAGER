@@ -52,6 +52,9 @@ public class CourseServiceImpl implements CourseService {
     
     @Value("${thirdeye.redis.course-prefix}")
     private String redisCoursePrefix;
+    
+    @Value("${thirdeye.multimedia.url.starter}")
+    private String urlStarter;
 	
 	public long getTodaysCount() {
 		LocalDateTime startOfToday = LocalDateTime.of(LocalDate.now(), LocalTime.MIN);
@@ -213,8 +216,9 @@ public class CourseServiceImpl implements CourseService {
 				log.error("Error in saving data");
 			}
 	    	course.setCourseResult(jsonResult);
-	    	coursePayload = new CoursePayload(course.getId() ,MailType.COURSE, course.getEmail(), "", priorityMap.get("highPriority"),
-	    			priorityMap.get("mediumPriority"), priorityMap.get("lowPriority"), course.getCompany(), priority.getStatus());
+	    	String url = urlStarter+"/pdfgenerater/v1/course/"+course.getId()+"/download";    	
+	    	coursePayload = new CoursePayload(course.getId() ,MailType.COURSE, course.getEmail(), url, priorityMap.get("highPriority"),
+	    	priorityMap.get("mediumPriority"), priorityMap.get("lowPriority"), course.getCompany(), priority.getStatus());
 	    } 
 	    else if (priority.getStatus().equals(Status.MAILED_COMPLETED))
 	    {
