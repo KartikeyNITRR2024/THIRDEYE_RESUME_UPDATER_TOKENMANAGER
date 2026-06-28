@@ -1,0 +1,5 @@
+package com.thirdeye30.resumehelper.tokenmanager.enums;
+
+public enum Status {
+EXTRACTION_COMPLETED, MAILED_COMPLETED, MAILED_FAILED, EXTRACTION_FAILED, COURSE_CREATION_COMPLETED, COURSE_CREATION_FAILED
+}

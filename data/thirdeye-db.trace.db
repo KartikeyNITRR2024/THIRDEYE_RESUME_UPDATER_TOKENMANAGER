@@ -154,3 +154,6 @@ Caused by: org.h2.mvstore.MVStoreException: The file is locked: C:/Users/lenovo/
 	at org.h2.mvstore.SingleFileStore.open(SingleFileStore.java:81)
 	at org.h2.mvstore.MVStore.<init>(MVStore.java:291)
 	... 59 more
+2026-06-28 20:27:39.941184+05:30 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLDataException: Value too long for column "RESULT CHARACTER VARYING(255)": "'{""High Priority"":[[""Java"",""www.google.com/High Priority""],[""Spring Boot"",""www.g... (569)"; SQL statement:
+update courses set company=?,course_status=?,email=?,job_description=?,job_url=?,result=?,yoe=? where id=? [22001-240]

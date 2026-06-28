@@ -1,6 +1,6 @@
 package com.thirdeye30.resumehelper.tokenmanager.services.impl;
 
-import org.springframework.beans.factory.annotation.Value; // Import this
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import com.thirdeye30.resumehelper.tokenmanager.dtos.ConfigDto;
 import com.thirdeye30.resumehelper.tokenmanager.entities.Config;
@@ -24,6 +24,12 @@ public class ConfigServiceImpl implements ConfigService {
 
     @Value("${config.default.max-days:1}")
     private Integer defaultMaxDays;
+    
+    @Value("${config.default.max-courses-created-per-day:300}")
+    private Integer maximumCourseCreatedPerDay;
+    
+    @Value("${config.default.max-courses-created-per-day-per-user:2}")
+    private Integer maximumCourseCreatedPerDayPerUser;
 
     private volatile ConfigDto cachedConfig;
 
@@ -40,6 +46,8 @@ public class ConfigServiceImpl implements ConfigService {
                 .id(CONFIG_ID)
                 .maximumTokenAllocated(configDto.getMaximumTokenAllocated())
                 .maximumTimeForUserInDays(configDto.getMaximumTimeForUserInDays())
+                .maximumCourseCreatedPerDay(configDto.getMaximumCourseCreatedPerDay())
+                .maximumNumberofCourseCreatedPerDayPerUser(configDto.getMaximumNumberofCourseCreatedPerDayPerUser())
                 .build();
         
         configRepository.save(config);
@@ -57,7 +65,7 @@ public class ConfigServiceImpl implements ConfigService {
                 .orElseGet(() -> {
                     log.warn("No DB config found. Using properties: Tokens={}, Days={}", 
                               defaultMaxTokens, defaultMaxDays);
-                    return new Config(CONFIG_ID, defaultMaxTokens, defaultMaxDays);
+                    return new Config(CONFIG_ID, defaultMaxTokens, defaultMaxDays, maximumCourseCreatedPerDay, maximumCourseCreatedPerDayPerUser);
                 });
         this.cachedConfig = mapToDto(config);
     }
@@ -66,6 +74,8 @@ public class ConfigServiceImpl implements ConfigService {
         ConfigDto dto = new ConfigDto();
         dto.setMaximumTokenAllocated(config.getMaximumTokenAllocated());
         dto.setMaximumTimeForUserInDays(config.getMaximumTimeForUserInDays());
+        dto.setMaximumCourseCreatedPerDay(config.getMaximumCourseCreatedPerDay());
+        dto.setMaximumNumberofCourseCreatedPerDayPerUser(config.getMaximumNumberofCourseCreatedPerDayPerUser());
         return dto;
     }
 }

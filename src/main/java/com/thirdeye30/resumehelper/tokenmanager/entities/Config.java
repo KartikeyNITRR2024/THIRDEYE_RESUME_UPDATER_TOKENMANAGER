@@ -25,4 +25,10 @@ public class Config {
 
     @Column(name = "max_time_days")
     private Integer maximumTimeForUserInDays;
+    
+    @Column(name = "max_course_created_per_days")
+    private Integer maximumCourseCreatedPerDay;
+    
+    @Column(name = "max_no_of_course_created_per_days_per_user")
+    private Integer maximumNumberofCourseCreatedPerDayPerUser;
 }
