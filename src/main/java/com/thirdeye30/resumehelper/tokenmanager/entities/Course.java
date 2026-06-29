@@ -25,7 +25,8 @@ import lombok.NoArgsConstructor;
     indexes = {
         @Index(name = "idx_email", columnList = "email"),
         @Index(name = "idx_company_job_url", columnList = "company, jobUrl"),
-        @Index(name = "idx_created_time", columnList = "createTime"),
+        @Index(name = "idx_status_create_time", columnList = "course_status, create_time"),
+        @Index(name = "idx_email_status_create_time", columnList = "email, course_status, create_time")
     }
 )
 @Data

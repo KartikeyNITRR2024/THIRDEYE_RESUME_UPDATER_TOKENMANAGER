@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.thirdeye30.resumehelper.tokenmanager.dtos.CourseDto;
+import com.thirdeye30.resumehelper.tokenmanager.enums.CourseStatus;
 import com.thirdeye30.resumehelper.tokenmanager.services.CourseService;
 
 import lombok.RequiredArgsConstructor;
@@ -32,5 +33,10 @@ public class CourseController {
     @GetMapping("/{id}")
     public ResponseEntity<CourseDto> getCourse(@PathVariable UUID id) {
         return ResponseEntity.ok(courseService.getCourseById(id));
+    }
+    
+    @GetMapping("/status/{id}")
+    public ResponseEntity<CourseStatus> getCourseStatus(@PathVariable UUID id) {
+        return ResponseEntity.ok(courseService.getCourseStatus(id));
     }
 }

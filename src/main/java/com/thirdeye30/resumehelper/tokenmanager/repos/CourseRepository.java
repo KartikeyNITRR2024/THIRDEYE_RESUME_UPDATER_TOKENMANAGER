@@ -40,4 +40,6 @@ public interface CourseRepository extends JpaRepository<Course, UUID> {
         @Param("status") CourseStatus status, 
         @Param("result") String result
     );
+    
+    List<Course> findByCreateTimeBeforeAndCourseStatusNotIn(LocalDateTime thresholdTime, List<CourseStatus> excludedStatuses);
 }

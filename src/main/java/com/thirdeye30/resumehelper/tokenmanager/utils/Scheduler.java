@@ -32,9 +32,9 @@ public class Scheduler {
         }
     }
     
-//    @Scheduled(fixedRate = 300000)
-//    public void uploadStaleDocument() {
-//    	log.info("Uploading stale resumes...");
-//    	resumeService.processStaleUpdates();
-//    }
+    @Scheduled(fixedRate = 300000)
+    public void failStaleCourses() {
+    	log.info("Uploading stale resumes...");
+    	courseService.failStaleCourses(10);
+    }
 }

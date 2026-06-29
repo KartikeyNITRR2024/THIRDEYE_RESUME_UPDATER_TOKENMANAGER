@@ -98,6 +98,8 @@ public class CourseServiceImpl implements CourseService {
 	            .build();
 	    
 	    Course savedCourse = courseRepository.save(course);
+	    saveCourseEntityToCache(savedCourse);
+	    
 	    log.info("Successfully created course with ID: {} for user: {}", savedCourse.getId(), savedCourse.getEmail());
 	    messageBrokerService.sendMessages("aiprocesser2", savedCourse);
 	    return convertToDto(savedCourse);
@@ -105,9 +107,13 @@ public class CourseServiceImpl implements CourseService {
 	
 	@Override
 	public CourseDto getCourseById(UUID id) {
-	    return courseRepository.findById(id)
-	            .map(this::convertToDto)
-	            .orElseThrow(() -> new RuntimeException("Course not found with ID: " + id));
+	    return convertToDto(getCourseFromCacheOrDb(id));
+	}
+	
+	@Override
+	public CourseStatus getCourseStatus(UUID id)
+	{
+		return getCourseFromCacheOrDb(id).getCourseStatus();
 	}
 
 	@Override
@@ -131,12 +137,10 @@ public class CourseServiceImpl implements CourseService {
 	            for (Message<PriorityDto> message : messages) {
 	                try {
 	                	CoursePayload coursePayload = processSingleMessage(message);
-	                	if(coursePayload!=null &&  coursePayload.getStatus().equals(Status.EXTRACTION_COMPLETED))
-	                	{
+	                	if(coursePayload != null && coursePayload.getStatus().equals(Status.EXTRACTION_COMPLETED)) {
 	                		coursePayloadList1.add(coursePayload);
 	                	}
-	                	else if(coursePayload!=null &&  coursePayload.getStatus().equals(Status.COURSE_CREATION_COMPLETED))
-	                	{
+	                	else if(coursePayload != null && coursePayload.getStatus().equals(Status.COURSE_CREATION_COMPLETED)) {
 	                		coursePayloadList2.add(coursePayload);
 	                	}
 	                } catch (Exception e) {
@@ -144,13 +148,11 @@ public class CourseServiceImpl implements CourseService {
 	                              message.getMessage().getId(), e.getMessage());
 	                }
 	            }
-	            if(!coursePayloadList1.isEmpty())
-		        {
+	            if(!coursePayloadList1.isEmpty()) {
 		        	messageBrokerService.sendMultipleMessages("courseprocesser", coursePayloadList1);
 		        	log.info("Sending {} mails to course processer", coursePayloadList1.size());
 		        }
-		        if(!coursePayloadList2.isEmpty())
-		        {
+		        if(!coursePayloadList2.isEmpty()) {
 		        	messageBrokerService.sendMultipleMessages("mailprocesser", coursePayloadList2);
 		        	log.info("Sending {} mails to mail processer", coursePayloadList2.size());
 		        }
@@ -178,68 +180,129 @@ public class CourseServiceImpl implements CourseService {
 	        return Collections.emptyMap();
 	    }
 	}
+	
+	@Override
+	@Transactional
+	public void failStaleCourses(int minutes) {
+	    LocalDateTime thresholdTime = LocalDateTime.now().minusMinutes(minutes);
+	    List<CourseStatus> excludedStatuses = List.of(
+	        CourseStatus.MAILED_COMPLETED, 
+	        CourseStatus.FAILED
+	    );
+	    List<Course> staleCourses = courseRepository.findByCreateTimeBeforeAndCourseStatusNotIn(thresholdTime, excludedStatuses);
+	    
+	    if (staleCourses.isEmpty()) {
+	        log.debug("No stale courses found older than {} minutes.", minutes);
+	        return;
+	    }
+
+	    List<String> redisKeysToDelete = new ArrayList<>();
+	    for (Course course : staleCourses) {
+	        log.warn("Course {} has been stuck in status {} for over {} minutes. Marking as FAILED.", 
+	                 course.getId(), course.getCourseStatus(), minutes);
+	                 
+	        course.setCourseStatus(CourseStatus.FAILED);
+	        redisKeysToDelete.add(redisCoursePrefix + "entity:" + course.getId().toString());
+	        redisKeysToDelete.add(redisCoursePrefix + "content:" + course.getId().toString());
+	    }
+	    courseRepository.saveAll(staleCourses);
+	    if (!redisKeysToDelete.isEmpty()) {
+	        redisTemplate.delete(redisKeysToDelete);
+	    }
+	    
+	    log.info("Successfully marked {} stale courses as FAILED and cleared them from cache.", staleCourses.size());
+	}
 
 	private CoursePayload processSingleMessage(Message<PriorityDto> message) {
 	    PriorityDto priority = message.getMessage();
-	    log.info("priorityDto is {}", priority.toString());
 	    CoursePayload coursePayload = null;
-	    Course course = courseRepository.findById(priority.getId())
-                .orElseThrow(() -> new EntityNotFoundException("Course not found with id: " + priority.getId()));
+	    Course course = getCourseFromCacheOrDb(priority.getId());
+	    boolean isTerminalState = false;
 	    if (priority.getStatus().equals(Status.EXTRACTION_COMPLETED)) {
 	        course.setCourseStatus(CourseStatus.EXTRACT_COMPLETED);
 		    Map<String, List<String>> resultData = new HashMap<>();
 	        resultData.put("highPriority", priority.getHighPriority());
 	        resultData.put("mediumPriority", priority.getMediumPriority());
 	        resultData.put("lowPriority", priority.getLowPriority());
-	        String jsonResult = "";
+	        
 			try {
-				jsonResult = objectMapper.writeValueAsString(resultData);
-				course.setCourseStatus(CourseStatus.EXTRACT_COMPLETED);
+				course.setResult(objectMapper.writeValueAsString(resultData));
 			} catch (JsonProcessingException e) {
 				course.setCourseStatus(CourseStatus.FAILED);
 				log.error("Error in saving data");
+				isTerminalState = true; // Force DB update on error
 			}
-	        course.setResult(jsonResult);
-	        coursePayload = new CoursePayload(course.getId() ,null, null, null, priority.getHighPriority(),
+			
+	        coursePayload = new CoursePayload(course.getId(), null, null, null, priority.getHighPriority(),
 					priority.getMediumPriority(), priority.getLowPriority(), course.getCompany(), priority.getStatus());
 	    }
-	    else if (priority.getStatus().equals(Status.COURSE_CREATION_COMPLETED))
-	    {
+	    else if (priority.getStatus().equals(Status.COURSE_CREATION_COMPLETED)) {
 	    	Map<String, List<String>> priorityMap = getResultAsMap(course.getResult());
 	    	course.setCourseStatus(CourseStatus.COURSE_CREATION_COMPLETED);
-	    	String jsonResult = course.getResult();
+	    	
 			try {
-				jsonResult = objectMapper.writeValueAsString(priority.getCoursePath());
-				course.setCourseStatus(CourseStatus.EXTRACT_COMPLETED);
+				course.setCourseResult(objectMapper.writeValueAsString(priority.getCoursePath()));
 			} catch (JsonProcessingException e) {
 				course.setCourseStatus(CourseStatus.FAILED);
 				log.error("Error in saving data");
+				isTerminalState = true;
 			}
-	    	course.setCourseResult(jsonResult);
-	    	String url = urlStarter+"/pdfgenerater/v1/course/"+course.getId()+"/download";    	
-	    	coursePayload = new CoursePayload(course.getId() ,MailType.COURSE, course.getEmail(), url, priorityMap.get("highPriority"),
-	    	priorityMap.get("mediumPriority"), priorityMap.get("lowPriority"), course.getCompany(), priority.getStatus());
+			
+	    	String url = urlStarter + "/pdfgenerater/v1/course/" + course.getId() + "/download";    	
+	    	coursePayload = new CoursePayload(course.getId(), MailType.COURSE, course.getEmail(), url, priorityMap.get("highPriority"),
+	    	        priorityMap.get("mediumPriority"), priorityMap.get("lowPriority"), course.getCompany(), priority.getStatus());
 	    } 
-	    else if (priority.getStatus().equals(Status.MAILED_COMPLETED))
-	    {
+	    else if (priority.getStatus().equals(Status.MAILED_COMPLETED)) {
 	    	course.setCourseStatus(CourseStatus.MAILED_COMPLETED);
+	    	isTerminalState = true;
 	    	try {
 	            CourseDto courseDto = convertToDto(course);
-	            String cacheKey = redisCoursePrefix + "content:" + course.getId().toString();
-	            String jsonToCache = objectMapper.writeValueAsString(courseDto);
-	            redisTemplate.opsForValue().set(cacheKey, jsonToCache, Duration.ofMinutes(30));
+	            String dtoCacheKey = redisCoursePrefix + "content:" + course.getId().toString();
+	            redisTemplate.opsForValue().set(dtoCacheKey, objectMapper.writeValueAsString(courseDto), Duration.ofMinutes(30));
 	        } catch (JsonProcessingException e) {
-	            log.error("Failed to serialize and cache course {} in Redis", course.getId(), e);
+	            log.error("Failed to serialize and cache course DTO in Redis", e);
 	        }
 	    } 
-	    else if (List.of(Status.COURSE_CREATION_FAILED, Status.MAILED_FAILED, Status.EXTRACTION_FAILED).contains(priority.getStatus()))
-	    {
+	    else if (List.of(Status.COURSE_CREATION_FAILED, Status.MAILED_FAILED, Status.EXTRACTION_FAILED).contains(priority.getStatus())) {
 	        course.setCourseStatus(CourseStatus.FAILED);
+	        isTerminalState = true;
 	    }
-        courseRepository.save(course);
+        if (isTerminalState) {
+            courseRepository.save(course);
+            redisTemplate.delete(redisCoursePrefix + "entity:" + course.getId().toString());
+            log.info("Terminal state reached. Course {} fully updated in DB.", course.getId());
+        } else {
+            saveCourseEntityToCache(course);
+            log.info("Intermediate state reached. Course {} updated in Cache only.", course.getId());
+        }
+
         return coursePayload;
 	}
 	
+	private Course getCourseFromCacheOrDb(UUID id) {
+	    String cacheKey = redisCoursePrefix + "entity:" + id.toString();
+	    String cachedEntity = redisTemplate.opsForValue().get(cacheKey);
+	    
+	    if (cachedEntity != null) {
+	        try {
+	            return objectMapper.readValue(cachedEntity, Course.class);
+	        } catch (JsonProcessingException e) {
+	            log.error("Failed to deserialize course entity from cache for id: {}", id, e);
+	        }
+	    }
+	    log.warn("Cache miss for entity {}. Fetching from DB.", id);
+	    return courseRepository.findById(id)
+	            .orElseThrow(() -> new EntityNotFoundException("Course not found with id: " + id));
+	}
+	
+	private void saveCourseEntityToCache(Course course) {
+	    String cacheKey = redisCoursePrefix + "entity:" + course.getId().toString();
+	    try {
+	        redisTemplate.opsForValue().set(cacheKey, objectMapper.writeValueAsString(course), Duration.ofMinutes(5));
+	    } catch (JsonProcessingException e) {
+	        log.error("Failed to serialize and cache course entity for id: {}", course.getId(), e);
+	    }
+	}
 
 	private CourseDto convertToDto(Course course) {
 	    CourseDto dto = new CourseDto();
@@ -254,7 +317,4 @@ public class CourseServiceImpl implements CourseService {
 	    dto.setCourseResult((course.getCourseResult()!=null && course.getCourseResult().length()>0)?getResultAsMap1(course.getCourseResult()):null);
 	    return dto;
 	}
-	
-	
-
 }
